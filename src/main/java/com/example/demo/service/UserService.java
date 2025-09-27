@@ -1,109 +1,163 @@
 package com.example.demo.service;
 
 import com.example.demo.dao.User;
+import com.example.demo.dto.DeleteAccountRequest;
 import com.example.demo.dto.UserRequest;
 import com.example.demo.dto.UserResponse;
 import com.example.demo.repository.UserRepository;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.time.Instant;
 import java.util.Optional;
 
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
 
-
     private final UserRepository userRepository;
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
-
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     public UserResponse signup(UserRequest request) {
-        User user = addUser(request);
-        return UserResponse.builder()
-                .username(user.getUsername())
-                .password(user.getPassword())
-                .email(user.getEmail())
-                .build();
+        if (!request.isValid()) {
+            throw new IllegalArgumentException("Invalid request");
+        }
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new IllegalArgumentException("Email already exists");
+        }
+
+        if (request.getUsername() != null && userRepository.existsByUsername(request.getUsername())) {
+            throw new IllegalArgumentException("Username already exists");
+        }
+
+        User savedUser = userRepository.save(User.builder()
+                .username(request.getUsername())
+                .email(request.getEmail().toLowerCase())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .provider("local")
+                .build());
+
+        String token = jwtUtil.generateToken(savedUser);
+        return buildUserResponse(savedUser, token);
     }
+
 
     public UserResponse login(UserRequest request) {
-        Optional<User> userOptional = userRepository.findByEmail(request.getEmail())
-                .filter(u -> encoder.matches(request.getPassword(), u.getPassword()));
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
 
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Invalid username or password");
+        }
+
+        String token = jwtUtil.generateToken(user);
+        updateLastLogin(user.getUsername());
+
+        return buildUserResponse(user, token);
+    }
+
+    public UserResponse oauthLogin(String provider, String providerId, String email) {
+        Optional<User> userOpt = userRepository.findByProviderAndProviderId(provider, providerId);
+
+        User user = userOpt.orElseGet(() -> {
+            String normalizedEmail = email != null ? email.toLowerCase() : null;
+            String username = null;
+            if (normalizedEmail != null) {
+                String base = normalizedEmail.split("@")[0].replaceAll("[^a-zA-Z0-9]", "");
+                String candidate = base;
+                int i = 0;
+                while (candidate.isBlank() || userRepository.existsByUsername(candidate)) {
+                    i++;
+                    candidate = base + i;
+                }
+                username = candidate;
+            }
+            User newUser = User.builder()
+                    .provider(provider)
+                    .providerId(providerId)
+                    .email(normalizedEmail)
+                    .username(username)
+                    .build();
+            return userRepository.save(newUser);
+        });
+
+        String token = jwtUtil.generateToken(user);
+        // Prefer update by id for oauth users
+        if (user.getId() != null) updateLastLoginById(user.getId());
+        return buildUserResponse(user, token);
+    }
+
+    public void updateLastLoginById(String id) {
+        userRepository.findById(id).ifPresent(u -> {
+            u.setLastLogin(Instant.now());
+            userRepository.save(u);
+        });
+    }
+
+
+
+
+    public Optional<User> findByUsername(String username) {
+        return userRepository.findByUsername(username);
+    }
+
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
+    }
+
+    public void updateLastLogin(String username) {
+        Optional<User> userOpt = findByUsername(username);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            user.setLastLogin(Instant.now());
+            userRepository.save(user);
+        }
+    }
+
+    public boolean existsByUsername(String username) {
+        return userRepository.existsByUsername(username);
+    }
+
+    public boolean existsByEmail(String email) {
+        return userRepository.existsByEmail(email);
+    }
+
+    public UserResponse buildUserResponse(User user, String token) {
         return UserResponse.builder()
-                .username(userOptional.get().getUsername())
-                .password(userOptional.get().getPassword())
-                .email(userOptional.get().getEmail())
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .createdAt(user.getCreatedAt())
+                .lastLogin(user.getLastLogin())
+                .token(token)
                 .build();
     }
 
+    public boolean deleteMyAccount(String username, DeleteAccountRequest req) {
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) return false;
 
-    // GET all users
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
+        User user = userOpt.get();
 
-
-    // GET user by ID
-    public Optional<User> getUserById(String id) {
-        return userRepository.findById(id);
-    }
-
-
-    // ADD new user
-    public User addUser(UserRequest request) {
-        if (!request.isValid()) {
-            throw new RuntimeException("invalid request");
+        if (user.getPassword() != null && !user.getPassword().isBlank()) {
+            // Normal user → verify password
+            if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
+                return false;
+            }
+        } else {
+            // SSO user → verify Google token
+            if (req.getSsoToken() == null || !googleTokenVerifier.verify(req.getSsoToken(), user.getEmail())) {
+                return false;
+            }
         }
 
-        // Check for duplicate email
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new RuntimeException("Email already in use: " + request.getEmail());
-        }
-
-
-        // Check for duplicate username
-        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            throw new RuntimeException("Username already in use: " + request.getUsername());
-        }
-
-        User user = User.builder()
-                .username(request.getUsername())
-                .password(encoder.encode(request.getPassword()))
-                .email(request.getEmail())
-                .build();
-
-
-        return userRepository.save(user);
-    }
-
-
-    // UPDATE user
-    public User updateUser(String id, UserRequest updatedUser) {
-        if (!updatedUser.isValid()) {
-            throw new RuntimeException("invalid request");
-        }
-
-        return userRepository.findById(id)
-                .map(user -> {
-                    user.setUsername(updatedUser.getUsername());
-                    user.setPassword(updatedUser.getPassword());
-                    user.setEmail(updatedUser.getEmail());
-                    return userRepository.save(user);
-                })
-                .orElseThrow(() -> new RuntimeException("User not found with id " + id));
-    }
-
-
-    // DELETE user
-    public void deleteUser(String id) {
-        userRepository.deleteById(id);
+        userRepository.delete(user);
+        return true;
     }
 }
-

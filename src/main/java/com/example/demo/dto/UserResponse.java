@@ -12,8 +12,11 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserResponse {
+    private String id;
     private String username;
     private String password;
     private String email;
+    private String token;
     private Instant createdAt;
+    private Instant lastLogin;
 }

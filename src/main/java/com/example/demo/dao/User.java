@@ -7,35 +7,69 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.Instant;
+import java.util.Collection;
 
 @Document(collection = "users")
 @Data                   // generates getters, setters, toString, equals, hashCode
 @Builder                // enables builder pattern
 @NoArgsConstructor      // generates no-args constructor
 @AllArgsConstructor     // generates all-args constructor
-public class User {
-
+public class User implements UserDetails {
 
     @Id
-    private String id;// MongoDB _id
+    private String id;
+
+    @Indexed(unique = true, sparse = true)
     private String username;
-    private String password;
+
+    @Indexed(unique = true)
     private String email;
 
+    private String password;   // hashed for local users only
+    private String provider;   // "local", "google", "github"
+    private String providerId; // OAuth provider user ID
 
     @CreatedDate
     private Instant createdAt;
 
-
     @LastModifiedDate
+    private Instant updatedAt;
+
     private Instant lastLogin;
 
+    @Builder.Default
+    private boolean isDeleted = false;
 
-    // @Builder.Default
-    // private LocalDateTime createdAt = LocalDateTime.now(); // default value when building
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return null;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return UserDetails.super.isAccountNonExpired();
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return UserDetails.super.isAccountNonLocked();
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return UserDetails.super.isCredentialsNonExpired();
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return UserDetails.super.isEnabled();
+    }
 }
 
 
