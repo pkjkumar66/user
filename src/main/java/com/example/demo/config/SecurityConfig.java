@@ -1,5 +1,8 @@
-package com.example.demo.service;
+package com.example.demo.config;
 
+import com.example.demo.service.CustomOAuth2SuccessHandler;
+import com.example.demo.service.JwtAuthenticationFilter;
+import com.example.demo.service.OAuthUserDetails;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
