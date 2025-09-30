@@ -15,4 +15,6 @@ public final class ApiPaths {
     public static final String DELETE_ME = "/me";
 
     public static final String GOOGLE_AUTHORIZATION_URL = "/oauth2/authorization/google";
+
+    public static final String FULL_SSO_SUCCESS = AUTH_BASE + SSO_SUCCESS;
 }

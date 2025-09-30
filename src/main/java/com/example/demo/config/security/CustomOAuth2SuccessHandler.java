@@ -1,5 +1,6 @@
 package com.example.demo.config.security;
 
+import com.example.demo.constant.ApiPaths;
 import com.example.demo.dao.User;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.util.JwtUtil;
@@ -57,7 +58,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         String token = jwtUtil.generateToken(user);
 
         // Redirect to frontend with token (example)
-        response.sendRedirect("/api/auth/sso/success?token=" + token);
+        response.sendRedirect(ApiPaths.FULL_SSO_SUCCESS + "?token=" + token);
     }
 
     public void updateLastLogin(String username) {
