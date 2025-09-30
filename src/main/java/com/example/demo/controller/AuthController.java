@@ -1,25 +1,22 @@
 package com.example.demo.controller;
 
-
+import com.example.demo.constant.ApiPaths;
 import com.example.demo.dto.ApiResponse;
 import com.example.demo.dto.DeleteAccountRequest;
 import com.example.demo.dto.UserRequest;
 import com.example.demo.dto.UserResponse;
 import com.example.demo.service.UserService;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping(ApiPaths.AUTH_BASE)
 public class AuthController {
+
     private final UserService userService;
 
     public AuthController(UserService userService) {
@@ -27,59 +24,68 @@ public class AuthController {
     }
 
     // --- Traditional Signup ---
-    @PostMapping("/signup")
-    public ApiResponse signup(@RequestBody UserRequest req) {
+    @PostMapping(ApiPaths.SIGNUP)
+    public ResponseEntity<ApiResponse<UserResponse>> signup(@RequestBody UserRequest req) {
         UserResponse signup = userService.signup(req);
-        return ApiResponse.builder()
+        ApiResponse<UserResponse> response = ApiResponse.<UserResponse>builder()
                 .data(signup)
                 .build();
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // --- Traditional Login ---
-    @PostMapping("/login")
-    public ApiResponse login(@RequestBody UserRequest req) {
+    @PostMapping(ApiPaths.LOGIN)
+    public ResponseEntity<ApiResponse<UserResponse>> login(@RequestBody UserRequest req) {
         UserResponse login = userService.login(req);
-        return ApiResponse.builder()
+        ApiResponse<UserResponse> response = ApiResponse.<UserResponse>builder()
                 .data(login)
                 .build();
+        return ResponseEntity.ok(response);
     }
 
     // --- Logout (stateless JWT, just discard token at frontend) ---
-    @PostMapping("/logout")
-    public ApiResponse logout() {
-        return ApiResponse.builder().build();
+    @PostMapping(ApiPaths.LOGOUT)
+    public ResponseEntity<ApiResponse<Void>> logout() {
+        ApiResponse<Void> response = ApiResponse.<Void>builder().build();
+        return ResponseEntity.ok(response);
     }
 
     // --- SSO Login Redirect (Google) ---
-    @GetMapping("/sso/login")
-    public Map<String, String> ssoLogin() {
-        return Map.of("url", "/oauth2/authorization/google");
+    @GetMapping(ApiPaths.SSO_LOGIN)
+    public ResponseEntity<Map<String, String>> ssoLogin() {
+        return ResponseEntity.ok(Map.of("url", ApiPaths.GOOGLE_AUTHORIZATION_URL));
     }
 
     // --- SSO Callback (handled by Spring Security automatically) ---
-    @GetMapping("/sso/success")
-    public Map<String, String> ssoSuccess(@RequestParam String token) {
-        return Map.of("message", "SSO Login success", "token", token);
+    @GetMapping(ApiPaths.SSO_SUCCESS)
+    public ResponseEntity<Map<String, String>> ssoSuccess(@RequestParam String token) {
+        return ResponseEntity.ok(Map.of(
+                "message", "SSO Login success",
+                "token", token
+        ));
     }
 
     // --- Delete My Account (supports normal + SSO flow) ---
-    @DeleteMapping("/me")
-    public ApiResponse deleteMyAccount(@RequestBody DeleteAccountRequest req, Principal principal) {
+    @DeleteMapping(ApiPaths.DELETE_ME)
+    public ResponseEntity<ApiResponse<Void>> deleteMyAccount(@RequestBody DeleteAccountRequest req,
+                                                             Principal principal) {
         if (principal == null || principal.getName() == null) {
-            return ApiResponse.builder()
+            ApiResponse<Void> unauthorized = ApiResponse.<Void>builder()
                     .errMessage("Unauthorized: missing authentication")
                     .build();
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(unauthorized);
         }
 
         String username = principal.getName();
         boolean deleted = userService.deleteMyAccount(username, req);
         if (deleted) {
-            return ApiResponse.builder()
-                    .build();
+            ApiResponse<Void> response = ApiResponse.<Void>builder().build();
+            return ResponseEntity.ok(response);
         } else {
-            return ApiResponse.builder()
-                    .errMessage("Failed to delete account. Please re-authenticate.").build();
+            ApiResponse<Void> response = ApiResponse.<Void>builder()
+                    .errMessage("Failed to delete account. Please re-authenticate.")
+                    .build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
 }
-

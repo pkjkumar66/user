@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ApiResponse {
-    UserResponse data;
-     String errMessage;
+public class ApiResponse<T> {
+    private T data;
+    private String errMessage;
 }
