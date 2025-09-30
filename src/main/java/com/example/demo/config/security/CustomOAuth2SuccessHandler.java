@@ -1,7 +1,8 @@
-package com.example.demo.service;
+package com.example.demo.config.security;
 
 import com.example.demo.dao.User;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.util.JwtUtil;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

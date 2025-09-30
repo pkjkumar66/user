@@ -1,5 +1,7 @@
-package com.example.demo.service;
+package com.example.demo.config.security;
 
+import com.example.demo.service.OAuthUserDetails;
+import com.example.demo.util.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
