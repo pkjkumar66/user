@@ -6,9 +6,17 @@ import com.example.demo.dto.DeleteAccountRequest;
 import com.example.demo.dto.UserRequest;
 import com.example.demo.dto.UserResponse;
 import com.example.demo.service.UserService;
+import com.example.demo.util.JwtUtil;
+import io.jsonwebtoken.Claims;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
 import java.util.Map;
@@ -18,9 +26,11 @@ import java.util.Map;
 public class AuthController {
 
     private final UserService userService;
+    private final JwtUtil jwtUtil;
 
-    public AuthController(UserService userService) {
+    public AuthController(UserService userService, JwtUtil jwtUtil) {
         this.userService = userService;
+        this.jwtUtil = jwtUtil;
     }
 
     // --- Traditional Signup ---
@@ -45,9 +55,10 @@ public class AuthController {
 
     // --- Logout (stateless JWT, just discard token at frontend) ---
     @PostMapping(ApiPaths.LOGOUT)
-    public ResponseEntity<ApiResponse<Void>> logout() {
-        ApiResponse<Void> response = ApiResponse.<Void>builder().build();
-        return ResponseEntity.ok(response);
+    public ResponseEntity<Map<String, String>> logout() {
+        return ResponseEntity.ok(Map.of(
+                "message", "Logout success"
+        ));
     }
 
     // --- SSO Login Redirect (Google) ---
@@ -59,9 +70,15 @@ public class AuthController {
     // --- SSO Callback (handled by Spring Security automatically) ---
     @GetMapping(ApiPaths.SSO_SUCCESS)
     public ResponseEntity<Map<String, String>> ssoSuccess(@RequestParam String token) {
+        Claims claims = jwtUtil.extractAllClaims(token);
+        String email = claims.get("email", String.class);
+        String username = claims.get("username", String.class);
+
         return ResponseEntity.ok(Map.of(
                 "message", "SSO Login success",
-                "token", token
+                "token", token,
+                "username", username,
+                "email", email
         ));
     }
 

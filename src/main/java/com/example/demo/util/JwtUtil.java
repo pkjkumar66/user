@@ -1,9 +1,16 @@
 package com.example.demo.util;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,24 +21,37 @@ public class JwtUtil {
     @Value("${app.jwt.secret:myDefaultSecretKeyForJWTWhichShouldBeVeryLongAndSecure}")
     private String secret;
 
-    @Value("${app.jwt.expiration:86400}") // seconds
+    @Value("${app.jwt.expiration:86400}") // in seconds
     private Long expiration;
 
-    private SecretKey getSigningKey() {
-        byte[] keyBytes = secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    @Value("${app.jwt.issuer:myapp}") // issuer claim
+    private String issuer;
+
+    @Value("${app.jwt.audience:users}") // audience claim
+    private String audience;
+
+    private SecretKey signingKey;
+
+    @PostConstruct
+    public void init() {
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
-            throw new IllegalStateException("JWT secret must be at least 256 bits (32 bytes). Configure a stronger secret.");
+            throw new IllegalStateException(
+                    "JWT secret must be at least 256 bits (32 bytes). Configure a stronger secret."
+            );
         }
-        return io.jsonwebtoken.security.Keys.hmacShaKeyFor(keyBytes);
+        signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(com.example.demo.dao.User user) {
         Map<String, Object> claims = new HashMap<>();
+        // custom user info claims
+        //        claims.put("userId", user.getId());
         claims.put("email", user.getEmail());
         claims.put("provider", user.getProvider() != null ? user.getProvider() : "local");
-        claims.put("userId", user.getId());
+        claims.put("username", user.getUsername());
 
-        // subject fallback: username -> email -> id
+        // standard claims: subject
         String subject = user.getUsername() != null ? user.getUsername() :
                 (user.getEmail() != null ? user.getEmail() : user.getId());
 
@@ -41,43 +61,50 @@ public class JwtUtil {
     private String createToken(Map<String, Object> claims, String subject) {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expiration * 1000);
-        return io.jsonwebtoken.Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(now)
-                .setExpiration(exp)
-                .signWith(getSigningKey(), io.jsonwebtoken.SignatureAlgorithm.HS256)
+
+        return Jwts.builder()
+                .setHeaderParam("typ", "JWT")         // header: type
+                .setHeaderParam("alg", "HS256")       // header: algorithm
+                .setClaims(claims)                    // payload: custom user info
+                .setSubject(subject)                  // payload: sub
+                .setIssuer(issuer)                    // payload: iss
+                .setAudience(audience)                // payload: aud
+                .setIssuedAt(now)                     // payload: iat
+                .setExpiration(exp)                   // payload: exp
+                .signWith(signingKey, SignatureAlgorithm.HS256) // signature
                 .compact();
     }
 
-    public boolean validateToken(String token, org.springframework.security.core.userdetails.UserDetails userDetails) {
+    public boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
-        return username != null && username.equals(userDetails.getUsername()) && !isTokenExpired(token);
-        // or use Objects.equals(username, userDetails.getUsername()) for null-safety
+        return username != null &&
+                username.equals(userDetails.getUsername()) &&
+                !isTokenExpired(token);
     }
 
     public String extractUsername(String token) {
-        return extractClaim(token, io.jsonwebtoken.Claims::getSubject);
+        return extractClaim(token, Claims::getSubject);
     }
+
 
     public Date extractExpiration(String token) {
-        return extractClaim(token, io.jsonwebtoken.Claims::getExpiration);
+        return extractClaim(token, Claims::getExpiration);
     }
 
-    public <T> T extractClaim(String token, java.util.function.Function<io.jsonwebtoken.Claims, T> claimsResolver) {
-        final io.jsonwebtoken.Claims claims = extractAllClaims(token);
+    public <T> T extractClaim(String token, java.util.function.Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
     }
 
-    private io.jsonwebtoken.Claims extractAllClaims(String token) {
-        return io.jsonwebtoken.Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
+    public Claims extractAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(signingKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
 
-    private Boolean isTokenExpired(String token) {
+    private boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }
 }

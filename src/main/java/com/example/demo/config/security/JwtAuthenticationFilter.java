@@ -22,7 +22,7 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final @Lazy OAuthUserDetails userDetailsService; // Lazy to break circular dependency
+    private final OAuthUserDetails userDetailsService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,

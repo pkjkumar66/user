@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -32,13 +33,26 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
         Map<String, Object> attributes = oauthToken.getPrincipal().getAttributes();
 
-        String provider = oauthToken.getAuthorizedClientRegistrationId(); // e.g., "google"
+        String provider = oauthToken.getAuthorizedClientRegistrationId(); // "google"
         String providerId = (String) attributes.get("sub"); // Google unique ID
+        String email = (String) attributes.get("email");
+        String username = (String) attributes.get("name");
 
-        // Create or get user
-        Optional<User> userOpt = userRepository.findByProviderAndProviderId(provider, providerId);
+        // Find existing user or create new one
+        User user = userRepository.findByProviderAndProviderId(provider, providerId)
+                .orElseGet(() -> {
+                    User newUser = User.builder()
+                            .email(email)
+                            .username(username)
+                            .provider(provider)
+                            .providerId(providerId)
+                            // You can set a random password or null since login is OAuth2
+                            .password(UUID.randomUUID().toString())
+                            .build();
+                    return userRepository.save(newUser);
+                });
 
-        String token = jwtUtil.generateToken(userOpt.orElse(User.builder().build()));
+        String token = jwtUtil.generateToken(user);
 
         // Redirect to frontend with token (example)
         response.sendRedirect("/api/auth/sso/success?token=" + token);
