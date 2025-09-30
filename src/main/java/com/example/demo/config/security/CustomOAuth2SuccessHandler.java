@@ -13,6 +13,7 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,7 +45,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                     User newUser = User.builder()
                             .email(email)
                             .username(username)
-                            .provider(provider)
+                            .provider(User.AuthProvider.GOOGLE)
                             .providerId(providerId)
                             // You can set a random password or null since login is OAuth2
                             .password(UUID.randomUUID().toString())
@@ -52,10 +53,20 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                     return userRepository.save(newUser);
                 });
 
+        updateLastLogin(user.getUsername());
         String token = jwtUtil.generateToken(user);
 
         // Redirect to frontend with token (example)
         response.sendRedirect("/api/auth/sso/success?token=" + token);
+    }
+
+    public void updateLastLogin(String username) {
+        Optional<User> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            user.setLastLogin(Instant.now());
+            userRepository.save(user);
+        }
     }
 }
 

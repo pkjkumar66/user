@@ -42,7 +42,7 @@ public class UserService {
                 .username(request.getUsername())
                 .email(request.getEmail().toLowerCase())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .provider("local")
+                .provider(User.AuthProvider.LOCAL)
                 .build());
 
         String token = jwtUtil.generateToken(savedUser);
@@ -64,53 +64,8 @@ public class UserService {
         return buildUserResponse(user, token);
     }
 
-    public UserResponse oauthLogin(String provider, String providerId, String email) {
-        Optional<User> userOpt = userRepository.findByProviderAndProviderId(provider, providerId);
-
-        User user = userOpt.orElseGet(() -> {
-            String normalizedEmail = email != null ? email.toLowerCase() : null;
-            String username = null;
-            if (normalizedEmail != null) {
-                String base = normalizedEmail.split("@")[0].replaceAll("[^a-zA-Z0-9]", "");
-                String candidate = base;
-                int i = 0;
-                while (candidate.isBlank() || userRepository.existsByUsername(candidate)) {
-                    i++;
-                    candidate = base + i;
-                }
-                username = candidate;
-            }
-            User newUser = User.builder()
-                    .provider(provider)
-                    .providerId(providerId)
-                    .email(normalizedEmail)
-                    .username(username)
-                    .build();
-            return userRepository.save(newUser);
-        });
-
-        String token = jwtUtil.generateToken(user);
-        // Prefer update by id for oauth users
-        if (user.getId() != null) updateLastLoginById(user.getId());
-        return buildUserResponse(user, token);
-    }
-
-    public void updateLastLoginById(String id) {
-        userRepository.findById(id).ifPresent(u -> {
-            u.setLastLogin(Instant.now());
-            userRepository.save(u);
-        });
-    }
-
-
-
-
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
-    }
-
-    public Optional<User> findByEmail(String email) {
-        return userRepository.findByEmail(email);
     }
 
     public void updateLastLogin(String username) {
@@ -120,14 +75,6 @@ public class UserService {
             user.setLastLogin(Instant.now());
             userRepository.save(user);
         }
-    }
-
-    public boolean existsByUsername(String username) {
-        return userRepository.existsByUsername(username);
-    }
-
-    public boolean existsByEmail(String email) {
-        return userRepository.existsByEmail(email);
     }
 
     public UserResponse buildUserResponse(User user, String token) {

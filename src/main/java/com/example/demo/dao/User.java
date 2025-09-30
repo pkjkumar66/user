@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.config.EnableMongoAuditing;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.security.core.GrantedAuthority;
@@ -20,7 +23,10 @@ import java.util.Collection;
 @Builder                // enables builder pattern
 @NoArgsConstructor      // generates no-args constructor
 @AllArgsConstructor     // generates all-args constructor
-public class User implements UserDetails {
+@EnableMongoAuditing
+@CompoundIndexes({
+        @CompoundIndex(name = "provider_providerId_idx", def = "{'provider': 1, 'providerId': 1}", unique = true, sparse = true)
+})public class User implements UserDetails {
 
     @Id
     private String id;
@@ -28,17 +34,14 @@ public class User implements UserDetails {
     @Indexed(unique = true, sparse = true)
     private String username;
 
-    @Indexed(unique = true)
+    @Indexed(unique = true, sparse = true)
     private String email;
 
     private String password;   // hashed for local users only
-    private String provider;   // "local", "google", "github"
+    private AuthProvider provider;   // "local", "google", "github"
     private String providerId; // OAuth provider user ID
 
-    @CreatedDate
     private Instant createdAt;
-
-    @LastModifiedDate
     private Instant updatedAt;
 
     private Instant lastLogin;
@@ -68,8 +71,14 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return UserDetails.super.isEnabled();
+        return !isDeleted;
     }
+
+
+    public enum AuthProvider {
+        LOCAL, GOOGLE, GITHUB
+    }
+
 }
 
 
