@@ -26,6 +26,7 @@ public class UserService {
     private final GoogleTokenVerifier googleTokenVerifier;
 
     public UserResponse signup(UserRequest request) {
+        Instant now = Instant.now();
         if (!request.isValid()) {
             throw new IllegalArgumentException("Invalid request");
         }
@@ -43,6 +44,8 @@ public class UserService {
                 .email(request.getEmail().toLowerCase())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .provider(User.AuthProvider.LOCAL)
+                .createdAt(now)
+                .updatedAt(now)
                 .build());
 
         String token = jwtUtil.generateToken(savedUser);
@@ -59,7 +62,7 @@ public class UserService {
         }
 
         String token = jwtUtil.generateToken(user);
-        updateLastLogin(user.getUsername());
+        user = updateLastLogin(user.getUsername());
 
         return buildUserResponse(user, token);
     }
@@ -68,13 +71,14 @@ public class UserService {
         return userRepository.findByUsername(username);
     }
 
-    public void updateLastLogin(String username) {
+    public User updateLastLogin(String username) {
         Optional<User> userOpt = findByUsername(username);
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             user.setLastLogin(Instant.now());
-            userRepository.save(user);
+            return userRepository.save(user);
         }
+        return User.builder().build();
     }
 
     public UserResponse buildUserResponse(User user, String token) {
@@ -106,6 +110,7 @@ public class UserService {
             }
         }
 
+        user.setUpdatedAt(Instant.now());
         userRepository.delete(user);
         return true;
     }

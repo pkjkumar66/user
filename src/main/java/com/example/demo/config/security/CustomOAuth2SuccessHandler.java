@@ -40,6 +40,7 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
         String email = (String) attributes.get("email");
         String username = (String) attributes.get("name");
 
+        Instant now = Instant.now();
         // Find existing user or create new one
         User user = userRepository.findByProviderAndProviderId(provider, providerId)
                 .orElseGet(() -> {
@@ -50,6 +51,8 @@ public class CustomOAuth2SuccessHandler implements AuthenticationSuccessHandler 
                             .providerId(providerId)
                             // You can set a random password or null since login is OAuth2
                             .password(UUID.randomUUID().toString())
+                            .createdAt(now)
+                            .updatedAt(now)
                             .build();
                     return userRepository.save(newUser);
                 });

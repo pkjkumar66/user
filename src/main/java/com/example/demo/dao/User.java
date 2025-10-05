@@ -4,10 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -23,7 +20,6 @@ import java.util.Collection;
 @Builder                // enables builder pattern
 @NoArgsConstructor      // generates no-args constructor
 @AllArgsConstructor     // generates all-args constructor
-@EnableMongoAuditing
 @CompoundIndexes({
         @CompoundIndex(name = "provider_providerId_idx", def = "{'provider': 1, 'providerId': 1}", unique = true, sparse = true)
 })public class User implements UserDetails {
@@ -40,7 +36,6 @@ import java.util.Collection;
     private String password;   // hashed for local users only
     private AuthProvider provider;   // "local", "google", "github"
     private String providerId; // OAuth provider user ID
-
     private Instant createdAt;
     private Instant updatedAt;
 
